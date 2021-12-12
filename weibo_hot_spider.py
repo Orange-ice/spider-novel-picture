@@ -1,6 +1,14 @@
 import time, datetime
 import requests
 from bs4 import BeautifulSoup
+import mysql.connector
+
+connection = mysql.connector.connect(user='root', password='123456', database='weibo_hot')
+cursor = connection.cursor()
+
+# 创建表
+cursor.execute(
+    "CREATE TABLE IF NOT EXISTS hots (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), ranking INT, hot_num VARCHAR(255), mark VARCHAR(255), url VARCHAR(255), create_date DATETIME )")
 
 host = 's.weibo.com'
 
@@ -35,9 +43,11 @@ def crawl():
 
 
 def data_processing(response):
+    """
+    将数据写入数据库
+    :param response: 获取的网页
+    """
     tr_bs4 = BeautifulSoup(response, 'html.parser').find_all('tr')
-
-    hot_list = []
 
     for i in range(len(tr_bs4)):
         # 去除第一项 （第一项是title【序号，关键字】]）
@@ -56,14 +66,18 @@ def data_processing(response):
                 ranking = 0
             else:
                 ranking = int(ranking)
-            hot_item = {ranking, title, hot_num, mark, link}
-            hot_list.append(hot_item)
+            # 当前时间
+            now = datetime.datetime.now()
+            formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
+            # 插入一条记录
+            cursor.execute(
+                'insert into hots (title, ranking, hot_num, mark, url, create_date) values (%s, %s, %s,%s, %s, %s)',
+                [title, ranking, hot_num, mark, link, formatted_date])
 
-    # print(hot_list)
-    current_hour = time.localtime().tm_hour  # 当前小时
-    local_time = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()  # UTC 时间
-    print(current_hour, local_time)
-
+    # 提交事务并关闭连接
+    connection.commit()
+    cursor.close()
+    connection.close()
 
 if __name__ == '__main__':
     data_processing(crawl())
